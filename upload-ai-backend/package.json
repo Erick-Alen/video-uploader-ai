@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "dev": "tsx watch src/server.ts"
+    "dev": "tsx watch src/server.ts",
+    "test": "tsx --test test/*.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -22,8 +26,8 @@
   "dependencies": {
     "@fastify/cors": "^8.3.0",
     "@fastify/multipart": "^7.7.3",
+    "@google/genai": "3.6.1",
     "@prisma/client": "5.2.0",
-    "ai": "^2.2.12",
     "fastify": "^4.23.0",
     "openai": "^4.6.0",
     "zod": "^3.22.2"
