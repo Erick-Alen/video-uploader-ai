@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { createReadStream } from 'node:fs';
 import { z } from 'zod';
-import { openai } from '../lib/openai';
+import { transcriptionClient } from '../lib/openai';
 import { prisma } from '../lib/prisma';
 
 export async function createTranscription(app:FastifyInstance) {
@@ -26,10 +26,9 @@ export async function createTranscription(app:FastifyInstance) {
     const videoPath = video.path;
     const audioReadStream = createReadStream(videoPath)
 
-    //openai communication is failing, check the whisper api
-    const response = await openai.audio.transcriptions.create({
+    const response = await transcriptionClient.audio.transcriptions.create({
       file: audioReadStream,
-      model: 'whisper-1',
+      model: process.env.OPENAI_TRANSCRIPTION_MODEL ?? 'whisper-1',
       language: 'pt',
       response_format: 'json',
       temperature: 0,

@@ -84,12 +84,12 @@ export function App() {
 
           <form onSubmit={handleSubmit} className='space-y-4'>
             <Label>Model</Label>
-            <Select disabled defaultValue='gpt3.5'>
+            <Select disabled defaultValue='configured'>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value='gpt3.5'>GPT 3.5 Turbo</SelectItem>
+                <SelectItem value='configured'>API-configured model</SelectItem>
               </SelectContent>
             </Select>
             <span className='block text-xs text-muted-foreground italic'>

@@ -1,5 +1,6 @@
 import { getFFmpeg } from '@/lib/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
+import { isAxiosError } from 'axios';
 import { FileVideo, Upload } from 'lucide-react';
 import { ChangeEvent, FormEvent, useMemo, useRef, useState } from 'react';
 import { Button } from './ui/button';
@@ -8,14 +9,13 @@ import { Separator } from './ui/separator';
 import { Textarea } from './ui/textarea';
 import { api } from '@/lib/axios';
 
-type Status = 'Waiting' | 'Converting' | 'Uploading' | 'Transcripting' | 'Success' | 'Error';
+type Status = 'Waiting' | 'Converting' | 'Uploading' | 'Transcripting' | 'Success';
 
 const statusMessages = {
   Converting: 'Converting vídeo...',
   Uploading: 'Uploading...',
   Transcripting: 'Transcripting vídeo...',
   Success: 'Success!...',
-  Error: 'Error!...',
 };
 
 interface VideoFormProps {
@@ -26,6 +26,7 @@ export function VideoForm(props: VideoFormProps) {
   //useState => alteração na interface através de u a mudança de uma variável
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [status, setStatus] = useState<Status>('Waiting');
+  const [error, setError] = useState<string | null>(null);
   const promptInputref = useRef<HTMLTextAreaElement>(null);
 
   const handleFileSelected = (ev: ChangeEvent<HTMLInputElement>) => {
@@ -39,17 +40,10 @@ export function VideoForm(props: VideoFormProps) {
   };
 
   const convertVideoToAudio = async (video: File) => {
-    console.log('Conversion started...');
     const ffmpeg = await getFFmpeg();
-    console.log('await getFFmpeg();');
-    await ffmpeg?.writeFile('input.mp4', await fetchFile(video));
-    console.log('await ffmpeg?.writeFile(');
+    await ffmpeg.writeFile('input.mp4', await fetchFile(video));
 
-    ffmpeg.on('progress', (progress) => {
-      console.log('Convert progress:' + Math.round(progress.progress * 100));
-    });
-    console.log('ffmpeg , (progress) => {');
-    ffmpeg.exec([
+    const exitCode = await ffmpeg.exec([
       '-i',
       'input.mp4',
       '-map',
@@ -60,55 +54,47 @@ export function VideoForm(props: VideoFormProps) {
       'libmp3lame',
       'output.mp3',
     ]);
-    console.log('ffmpeg.exec([');
+    if (exitCode !== 0) {
+      throw new Error('FFmpeg could not extract audio');
+    }
 
     const data = await ffmpeg.readFile('output.mp3');
-    console.log('await ffmpeg.readFile');
-
-    const audioFileBlob = new Blob([data], { type: 'audio/mpeg' });
-    const audioFile = new File([audioFileBlob], 'audio.mp3', {
-      type: 'audio/mpeg',
-    });
-
-    console.log('Conversion success');
-    return audioFile;
-
-    // ffmpeg.on('log', log => {
-    //   console.log(log)
-    // });
+    return new File([data], 'audio.mp3', { type: 'audio/mpeg' });
   };
 
   const handleUploadVideo = async (event: FormEvent<HTMLFormElement>) => {
-    console.log('entrou na handleUploadVideo');
     event.preventDefault();
-    const prompt = promptInputref.current?.value;
     if (!videoFile) {
       return;
     }
+
+    setError(null);
     setStatus('Converting');
+    let failureMessage = 'Audio extraction failed';
 
-    //converter from audio to video
-    const audioFile = await convertVideoToAudio(videoFile);
+    try {
+      const audioFile = await convertVideoToAudio(videoFile);
+      const data = new FormData();
+      data.append('file', audioFile);
 
-    const data = new FormData();
+      failureMessage = 'Audio upload failed';
+      setStatus('Uploading');
+      const response = await api.post('/videos', data);
+      const videoId = response.data.video.id;
 
-    data.append('file', audioFile);
+      failureMessage = 'Transcription failed';
+      setStatus('Transcripting');
+      await api.post(`/videos/${videoId}/transcription`, {
+        prompt: promptInputref.current?.value ?? '',
+      });
 
-    setStatus('Uploading');
-
-    const response = await api.post('/videos', data);
-
-    const videoId = response.data.video.id;
-
-    setStatus('Transcripting');
-
-    await api.post(`/videos/${videoId}/transcription`, {
-      prompt,
-    });
-
-    console.log('transcription success');
-    setStatus('Success');
-    props.onUploadedVideo(videoId);
+      setStatus('Success');
+      props.onUploadedVideo(videoId);
+    } catch (cause) {
+      const statusCode = isAxiosError(cause) ? cause.response?.status : undefined;
+      setError(statusCode ? `${failureMessage} (HTTP ${statusCode}).` : `${failureMessage}.`);
+      setStatus('Waiting');
+    }
   };
 
   const previewURL = useMemo(() => {
@@ -171,6 +157,11 @@ export function VideoForm(props: VideoFormProps) {
           statusMessages[status]
         )}
       </Button>
+      {error && (
+        <p role='alert' className='text-sm text-red-400'>
+          {error}
+        </p>
+      )}
     </form>
   );
 }

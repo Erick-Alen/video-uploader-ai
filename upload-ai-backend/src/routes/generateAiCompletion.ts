@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { OpenAIStream, streamToResponse } from 'ai';
-import { openai } from '../lib/openai';
+import { generationClient } from '../lib/openai';
 
 export async function generateAiCompletion(app:FastifyInstance) {
   app.post('/ai/generate-completion', async (req, res) => {
@@ -14,7 +14,6 @@ export async function generateAiCompletion(app:FastifyInstance) {
 
     const { videoId, prompt, temperature } = bodySchema.parse(req.body)
 
-    //not able to make the communication witht he open ai, check the whisper api
     const video = await prisma.video.findUniqueOrThrow({
       where: {
         id: videoId
@@ -27,8 +26,8 @@ export async function generateAiCompletion(app:FastifyInstance) {
 
     const promptMessage = prompt.replace('{transcription}', video.transcription)
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo-16k',
+    const response = await generationClient.chat.completions.create({
+      model: process.env.OPENAI_GENERATION_MODEL ?? 'gpt-3.5-turbo-16k',
       temperature,
       messages: [
         {role: 'user', content: promptMessage}
